@@ -56,20 +56,21 @@ class network(nn.Module):
 
 def learn(learner,args,task_target,log_dir):
     if args.num_b==1:
+        loss_rem = []
+        b_rem = []
+        b_after_rem = []
+        for i in range(args.num_tasks):
+            b_after_rem.append([])
         for update in range(args.num_updates):
             input = torch.FloatTensor(torch.ones(1, 1))
             lossfun = nn.MSELoss()
             losses = []
-            loss_rem = []
-            b_rem = []
-            b_after_rem = []
-            for i in range(args.num_tasks):
-                b_after_rem.append([])
             for i in range(args.num_tasks):
                 target = torch.FloatTensor(torch.ones(1, 1) * task_target[i])
                 loss = lossfun(learner.forward(input), target)
                 params = learner.update_params(loss, step_size=args.inner_lr, first_order=args.first_order)
-                b_after_rem[i].append(params['layer0.weight'].data.numpy()[0, 0])
+                b_after_rem[i].append(params['layer0.weight'].data.numpy()[0,0])
+                #print(params['layer0.weight'].data.numpy()[0,0])
                 losses.append(lossfun(learner.forward(input, params), target))
 
             total_loss = torch.mean(torch.stack(losses, dim=0))
@@ -78,8 +79,81 @@ def learn(learner,args,task_target,log_dir):
             grads = parameters_to_vector(grads)
             old_params = parameters_to_vector(learner.parameters())
             vector_to_parameters(old_params - args.outer_lr * grads, learner.parameters())
-            b_rem.append(learner.layer0.weight.data[0, 0].numpy())
+            b_rem.append(learner.layer0.weight.data.numpy()[0,0])
 
+            print(total_loss.data.numpy())
+            print(learner.layer0.weight.data.numpy()[0,0])
+        np.save(log_dir+'loss.npy',loss_rem)
+        np.save(log_dir+'b.npy',b_rem)
+        np.save(log_dir + 'bafter1.npy', b_after_rem[0])
+        np.save(log_dir + 'bafter2.npy', b_after_rem[1])
+        plt.figure()
+        plt.plot(loss_rem)
+        plt.title('mean loss(after adaption)')
+        plt.figure()
+        plt.plot(b_rem,label='b(before update)')
+        plt.plot(b_after_rem[0], label='b(after update on task 1 (3))')
+        plt.plot(b_after_rem[1], label='b(after update on task 2 (5))')
+        plt.legend()
+        plt.show()
+
+
+    elif args.num_b==2:
+        loss_rem = []
+        b1_rem = []
+        b2_rem = []
+        b1_after_rem = []
+        b2_after_rem = []
+        for i in range(args.num_tasks):
+            b1_after_rem.append([])
+            b2_after_rem.append([])
+        for update in range(args.num_updates):
+            input = torch.FloatTensor(torch.ones(1, 1))
+            lossfun = nn.MSELoss()
+            losses = []
+            for i in range(args.num_tasks):
+                target = torch.FloatTensor(torch.ones(1, 1) * task_target[i])
+                loss = lossfun(learner.forward(input), target)
+                params = learner.update_params(loss, step_size=args.inner_lr, first_order=args.first_order)
+                b1_after_rem[i].append(params['layer0.weight'].data.numpy()[0, 0])
+                b2_after_rem[i].append(params['layer1.weight'].data.numpy()[0, 0])
+                print('b1 after%i'%i,params['layer0.weight'].data.numpy()[0,0])
+                print('b2 after%i' % i, params['layer1.weight'].data.numpy()[0, 0])
+                losses.append(lossfun(learner.forward(input, params), target))
+
+            total_loss = torch.mean(torch.stack(losses, dim=0))
+            loss_rem.append(total_loss.data.numpy())
+            grads = torch.autograd.grad(total_loss, learner.parameters())
+            grads = parameters_to_vector(grads)
+            old_params = parameters_to_vector(learner.parameters())
+            vector_to_parameters(old_params - args.outer_lr * grads, learner.parameters())
+            b1_rem.append(learner.layer0.weight.data.numpy()[0, 0])
+            b2_rem.append(learner.layer1.weight.data.numpy()[0, 0])
+
+            print('loss',total_loss.data.numpy())
+            print('b1 before',learner.layer0.weight.data.numpy()[0, 0])
+            print('b2 before',learner.layer1.weight.data.numpy()[0, 0])
+        np.save(log_dir + 'loss.npy', loss_rem)
+        np.save(log_dir + 'b1.npy', b1_rem)
+        np.save(log_dir + 'b2.npy', b2_rem)
+        np.save(log_dir + 'b1after1.npy', b1_after_rem[0])
+        np.save(log_dir + 'b1after2.npy', b1_after_rem[1])
+        np.save(log_dir + 'b2after1.npy', b2_after_rem[0])
+        np.save(log_dir + 'b2after2.npy', b2_after_rem[1])
+        plt.figure()
+        plt.plot(loss_rem)
+        plt.title('mean loss(after adaption)')
+        plt.figure()
+        plt.plot(b1_rem, label='b1(before update)')
+        plt.plot(b1_after_rem[0], label='b1(after update on task 1 (3))')
+        plt.plot(b1_after_rem[1], label='b1(after update on task 2 (5))')
+        plt.legend()
+        plt.figure()
+        plt.plot(b2_rem, label='b2(before update)')
+        plt.plot(b2_after_rem[0], label='b2(after update on task 1 (3))')
+        plt.plot(b2_after_rem[1], label='b2(after update on task 2 (5))')
+        plt.legend()
+        plt.show()
     return
 
 
@@ -100,7 +174,7 @@ def main(args,log_dir):
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_updates', help='number of updates', type=int, default=200)
-    parser.add_argument('--num_b', help='number of network parameters b', type=int, default=1)
+    parser.add_argument('--num_b', help='number of network parameters b', type=int, default=2)
     parser.add_argument('--B1',help='the target of regression task 1',type=int,default=3)
     parser.add_argument('--B2', help='the target of regression task 2', type=int, default=5)
     parser.add_argument('--B3', help='the target of regression task 3', type=int, default=7)
