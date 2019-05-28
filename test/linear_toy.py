@@ -100,6 +100,7 @@ def learn(learner,args,task_target,log_dir):
 
     elif args.num_b==2:
         loss_rem = []
+        loss_rem_2=[]
         b1_rem = []
         b2_rem = []
         b1_after_rem = []
@@ -113,6 +114,7 @@ def learn(learner,args,task_target,log_dir):
             input = torch.FloatTensor(torch.ones(1, 1))
             lossfun = nn.MSELoss()
             losses = []
+            losses_2=[]
             b1_rem.append(learner.layer0.weight.data.numpy()[0, 0])
             b2_rem.append(learner.layer1.weight.data.numpy()[0, 0])
             for i in range(args.num_tasks):
@@ -124,9 +126,13 @@ def learn(learner,args,task_target,log_dir):
                 print('b1 after%i'%i,params['layer0.weight'].data.numpy()[0,0])
                 print('b2 after%i' % i, params['layer1.weight'].data.numpy()[0, 0])
                 losses.append(lossfun(learner.forward(input, params), target))
+                #losses.append(loss)
+                losses_2.append(lossfun(learner.forward(input, params), target))
 
             total_loss = torch.mean(torch.stack(losses, dim=0))
+            #total_loss_2 = torch.mean(torch.stack(losses_2, dim=0))
             loss_rem.append(total_loss.data.numpy())
+            #loss_rem_2.append(total_loss_2.data.numpy())
             grads = torch.autograd.grad(total_loss, learner.parameters())
             grads = parameters_to_vector(grads)
             b1_gradients.append(grads[0].data.numpy()*args.outer_lr*-1)
@@ -139,7 +145,7 @@ def learn(learner,args,task_target,log_dir):
             print('loss',total_loss.data.numpy())
             print('b1 before',learner.layer0.weight.data.numpy()[0, 0])
             print('b2 before',learner.layer1.weight.data.numpy()[0, 0])
-        np.save(log_dir + 'loss.npy', loss_rem)
+        np.save(log_dir + 'loss2-%i.npy'%args.number, loss_rem)
         np.save(log_dir + 'b1.npy', b1_rem)
         np.save(log_dir + 'b2.npy', b2_rem)
         np.save(log_dir + 'b1after1.npy', b1_after_rem[0])
@@ -160,17 +166,19 @@ def learn(learner,args,task_target,log_dir):
         plt.plot(b2_after_rem[1], label='b2(after update on task 2 (5))')
         plt.legend()
 
-        xs=np.arange(0.5,3,0.1)
+        xs=np.arange(0.5,7,0.5)
         y1s=3/xs
         y2s=5/xs
-        '''for i in range(10):
+        if not os.path.exists(log_dir+'figures/'):
+            os.makedirs(log_dir+'figures/')
+        '''for i in range(0,500,40):
             plt.figure()
             plt.scatter(xs, y1s)
             plt.scatter(xs, y2s)
-            plt.scatter(b1_rem[i],b2_rem[i])
+            plt.scatter(b1_rem[i],b2_rem[i],s=10)
             plt.arrow(b1_rem[i],b2_rem[i],b1_gradients[i],b2_gradients[i])
-            plt.scatter(b1_after_rem[0][i], b2_after_rem[0][i])
-            plt.scatter(b1_after_rem[1][i], b2_after_rem[1][i])
+            plt.scatter(b1_after_rem[0][i], b2_after_rem[0][i],s=10)
+            plt.scatter(b1_after_rem[1][i], b2_after_rem[1][i],s=10)
             plt.savefig(log_dir+'figures/%i.png'%i)
             plt.close()'''
         plt.show()
@@ -193,18 +201,19 @@ def main(args,log_dir):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_updates', help='number of updates', type=int, default=200)
+    parser.add_argument('--num_updates', help='number of updates', type=int, default=500)
     parser.add_argument('--num_b', help='number of network parameters b', type=int, default=2)
     parser.add_argument('--B1',help='the target of regression task 1',type=int,default=3)
     parser.add_argument('--B2', help='the target of regression task 2', type=int, default=5)
     parser.add_argument('--B3', help='the target of regression task 3', type=int, default=7)
     parser.add_argument('--num_tasks', help='number of regression tasks', type=int, default=2)
-    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.1)
+    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.01)
     parser.add_argument('--outer_lr', help='lr for outer update', type=float, default=0.1)
     parser.add_argument('--first_order', help='use first order approximation', action='store_true')
     parser.add_argument('--plot', help='whether plot figure', action='store_true')
     parser.add_argument('--allow_bias', help='allowing bias', action='store_true')
     parser.add_argument('--dir', help='log directory', type=str,default='./data/linear_toy/')
+    parser.add_argument('--number', help='number for storing data', type=int, default=5)
 
     args = parser.parse_args()
     log_dir=args.dir+str(args.num_b)+'_'+str(args.num_tasks)+'_'+str(args.inner_lr)+'_'+str(

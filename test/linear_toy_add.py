@@ -84,6 +84,8 @@ def learn(learner,args,task_target,log_dir):
                 print('b2 after%i' % i, params['layer0.weight'].data.numpy()[1, 0])
                 #print(params['layer0.weight'].data.numpy()[0,0])
                 losses.append(lossfun(learner.forward(input, params), target))
+                #losses.append(loss)
+
 
             total_loss = torch.mean(torch.stack(losses, dim=0))
             loss_rem.append(total_loss.data.numpy())
@@ -121,6 +123,8 @@ def learn(learner,args,task_target,log_dir):
         xs = np.arange(0, 5, 0.5)
         y1s = 3 - xs
         y2s = 5 - xs
+        if not os.path.exists(log_dir+'figures/'):
+            os.makedirs(log_dir+'figures/')
         '''for i in range(50):
             plt.figure()
             plt.scatter(xs, y1s)
@@ -227,7 +231,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
     log_dir=args.dir+str(args.num_b)+'_'+str(args.num_tasks)+'_'+str(args.inner_lr)+'_'+str(
-        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'add/'
+        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'add_sim/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
