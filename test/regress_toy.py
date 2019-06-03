@@ -54,7 +54,22 @@ class network(nn.Module):
             updated_params[name] = param - step_size * grad
         return updated_params
 
+    def update_params_clip(self, loss, step_size=0.5, first_order=False):
+        """Apply one step of gradient descent on the loss function `loss`, with
+        step-size `step_size`, and returns the updated parameters of the neural
+        network.
+        """
+        grads = torch.autograd.grad(loss, self.parameters(),
+                                    create_graph=not first_order)
+        for g in grads:
+            g = torch.clamp(g, -0.5, 0.5)
+        updated_params = OrderedDict()
+        for (name, param), grad in zip(self.named_parameters(), grads):
+            updated_params[name] = param - step_size * grad
+        return updated_params
+
 def learn(learner,args,task_target,log_dir):
+    learner_test = network(args.num_layers,args.num_hidden)
     loss_rem = []
     loss_rem_test = []
     max_grads=[]
@@ -67,19 +82,20 @@ def learn(learner,args,task_target,log_dir):
         losses = []
         for i in range(3):
             mean = i - 1
-            input_tem = torch.FloatTensor(np.random.normal(mean*3,1,(args.batch_size,1)))
+            input_tem = torch.FloatTensor(np.random.normal(mean*2,1,(args.batch_size,1)))
             target_tem = input_tem * args.B3
-            losses_tem=[]
-            loss = lossfun(learner.forward(input_tem), target_tem)
-            losses_tem.append(loss)
-            for j in range(2):
-                target = input * task_target[i]
-                loss = lossfun(learner.forward(input), target)
-                losses_tem.append(loss)
-            loss = torch.mean(torch.stack(losses_tem, dim=0))
-            params = learner.update_params(loss, step_size=args.inner_lr, first_order=args.first_order)
             params=None
-            loss_tem=lossfun(learner.forward(input_tem, params), target_tem)
+            old_params = parameters_to_vector(learner.parameters())
+            vector_to_parameters(old_params, learner_test.parameters())
+            for _ in range(3):
+                loss = lossfun(learner_test.forward(input_tem), target_tem)
+                grads = torch.autograd.grad(loss, learner_test.parameters())
+                grads = parameters_to_vector(grads)
+                grads = torch.clamp(grads, -0.5, 0.5)
+                old_params = parameters_to_vector(learner_test.parameters())
+                vector_to_parameters(old_params - args.outer_lr * grads, learner_test.parameters())
+
+            loss_tem=lossfun(learner_test.forward(input_tem), target_tem)
             print(i-1,loss_tem)
             loss_rem_test[i].append(loss_tem.data.numpy())
 
@@ -97,6 +113,7 @@ def learn(learner,args,task_target,log_dir):
         loss_rem.append(total_loss.data.numpy())
         grads = torch.autograd.grad(total_loss, learner.parameters())
         grads = parameters_to_vector(grads)
+        #grads = torch.clamp(grads,-0.5,0.5)
         max_grads.append(torch.max(torch.abs(grads)).data.numpy())
         old_params = parameters_to_vector(learner.parameters())
         vector_to_parameters(old_params - args.outer_lr * grads, learner.parameters())
@@ -171,7 +188,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
     log_dir=args.dir+str(args.num_layers)+'_'+str(2)+'_'+str(args.inner_lr)+'_'+str(
-        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'_'+str(args.batch_size)+'/'
+        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'_'+str(args.batch_size)+'clip1/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
