@@ -125,17 +125,17 @@ def learn(learner,args,task_target,log_dir):
         y2s = 5 - xs
         if not os.path.exists(log_dir+'figures/'):
             os.makedirs(log_dir+'figures/')
-        '''for i in range(50):
+        for i in range(50):
             plt.figure()
-            plt.scatter(xs, y1s)
-            plt.scatter(xs, y2s)
+            plt.plot(xs, y1s)
+            plt.plot(xs, y2s)
             plt.scatter(b1_rem[i], b2_rem[i])
             plt.arrow(b1_rem[i], b2_rem[i], b1_gradients[i], b2_gradients[i])
             plt.scatter(b1_after_rem[0][i], b2_after_rem[0][i])
             plt.scatter(b1_after_rem[1][i], b2_after_rem[1][i])
             plt.savefig(log_dir + 'figures/%i.png' % i)
 
-            plt.close()'''
+            plt.close()
         plt.show()
 
 
@@ -231,7 +231,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
     log_dir=args.dir+str(args.num_b)+'_'+str(args.num_tasks)+'_'+str(args.inner_lr)+'_'+str(
-        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'add_sim/'
+        args.outer_lr)+'_'+str(args.B1)+'_'+str(args.B2)+'_'+str(args.B3)+'add/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
