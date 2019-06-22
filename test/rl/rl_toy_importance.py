@@ -76,8 +76,10 @@ class bandit():
         return state
 
 class sampler():
-    def __init__(self,num_steps):
+    def __init__(self,num_steps,num_bandits):
         self.num_steps = num_steps
+        self.num_bandits = num_bandits
+        self.cnt = np.zeros((self.num_bandits,),dtype=np.float32)
         return
 
     def sample(self,env,policy,params=None):
@@ -91,6 +93,31 @@ class sampler():
             _,reward,state = env.step(action)
             action_batch[i]=action
             reward_batch[i]=reward
+        state_batch = torch.FloatTensor(state_batch)
+        action_batch = torch.FloatTensor(action_batch)
+        reward_batch = torch.FloatTensor(reward_batch)
+        return episode(state_batch,action_batch,reward_batch)
+
+    def balance_sample(self,env,policy,params=None):
+        state_batch = np.zeros((self.num_steps,1),dtype=np.float32)
+        action_batch = np.zeros((self.num_steps,1),dtype=np.float32)
+        reward_batch = np.zeros((self.num_steps,1),dtype=np.float32)
+        state = env.reset()
+        action_batch = np.random.choice(np.arange(self.num_bandits),(self.num_steps,1),replace=False)
+        arg = np.argsort(-1*self.cnt)
+        count=0
+        for i in range(self.num_bandits):
+            if self.cnt[arg[i]]>0:
+                action_batch[count,0] = arg[i]
+                count =count + 1
+        for i in range(self.num_steps):
+            state_batch[i]=state
+            #action = policy.sample_action(torch.FloatTensor(state),params).data.numpy()[0]
+            action =action_batch[i]
+            _,reward,state = env.step(action)
+            reward_batch[i]=reward
+            if reward>0:
+                self.cnt[action] = self.cnt[action]+1
         state_batch = torch.FloatTensor(state_batch)
         action_batch = torch.FloatTensor(action_batch)
         reward_batch = torch.FloatTensor(reward_batch)
@@ -151,7 +178,10 @@ class network(nn.Module):
 
                 if old_pi is None:
                     old_pi = detach_distribution(pi)
+
+
                 advantages = valid_episodes.r
+
                 log_ratio = (pi.log_prob(valid_episodes.a)
                              - old_pi.log_prob(valid_episodes.a))
                 if log_ratio.dim() > 2:
@@ -160,6 +190,7 @@ class network(nn.Module):
 
                 loss = -torch.mean(ratio * advantages)
                 losses.append(loss)
+
 
                 kl = torch.mean(kl_divergence(pi, old_pi))
                 kls.append(kl)
@@ -229,6 +260,12 @@ class network(nn.Module):
             updated_params[name] = param - step_size * grad
         return updated_params
 
+def learn(learner,args,train_envs, test_envs,log_dir):
+    learner_test = network(args.num_layers,args.num_hidden,args.num_bandits)
+
+    return
+
+
 def tttest(learner,args,train_envs, test_envs,log_dir):
     batch_sampler = sampler(args.batch_size)
     for i in range(args.num_updates):
@@ -246,9 +283,10 @@ def tttest(learner,args,train_envs, test_envs,log_dir):
 
         print(np.mean(rew_rem))
 
+
 def test(learner,args,train_envs, test_envs,log_dir):
     learner_test = network(args.num_layers, args.num_hidden, args.num_bandits)
-    batch_sampler = sampler(args.batch_size)
+    batch_sampler = sampler(args.batch_size,args.num_bandits)
     max_kl = args.max_kl
     cg_iters = args.cg_iters
     cg_damping = args.cg_damping
@@ -262,7 +300,7 @@ def test(learner,args,train_envs, test_envs,log_dir):
         adapt_episodes=[]
         rew_rem=[]
         for j in range(args.num_tasks_train):
-            e = batch_sampler.sample(train_envs[j],learner)
+            e = batch_sampler.balance_sample(train_envs[j],learner)
             inner_loss = learner.cal_loss(e.s,e.a,e.r)
             params = learner.update_params(inner_loss,args.inner_lr,args.first_order)
             a_e = batch_sampler.sample(train_envs[j], learner,params)
@@ -305,7 +343,8 @@ def test(learner,args,train_envs, test_envs,log_dir):
             step_size *= ls_backtrack_ratio
         else:
             vector_to_parameters(old_params, learner.parameters())
-
+        test_input = torch.FloatTensor([[1]])
+        test_output = learner.forward(test_input).data.numpy()[0]
         if (i+1)%10==0:
             test_input = torch.FloatTensor([[1]])
             test_output = learner.forward(test_input).data.numpy()[0]
@@ -319,7 +358,6 @@ def test(learner,args,train_envs, test_envs,log_dir):
                 plt.bar(np.arange(len(test_output)), test_output)
                 plt.savefig(log_dir + 'figures/after%i_%i.png' % (j,i))
                 plt.close()
-
 
     np.save(log_dir + 'train_rew'+str(args.inner_lr)+'.npy', train_rew)
     plt.figure()
@@ -371,18 +409,14 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=5)
     parser.add_argument('--max_kl', help='max kl divergence', type=float, default= 1e-2)
     parser.add_argument('--cg_iters', type=int, default=10)
-    parser.add_argument('--inner_loop_cnt', type=int, default=5)
     parser.add_argument('--cg_damping', help='positive reward for good bandits', type=float, default=1e-5)
     parser.add_argument('--ls_max_steps', help='negative reward for bad bandits', type=int, default=15)
     parser.add_argument('--ls_backtrack_ratio', type=float, default=0.8)
     args = parser.parse_args()
     random.seed(0)
-    log_dir=args.dir+str(args.num_layers)+'_'+str(2)+'_'+str(args.inner_lr)+'_'+str(
-        args.outer_lr)+'_'+str(args.num_bandits)+'_'+str(args.r_positive)+'_'+str(
-        args.r_negative)+'_'+str(args.batch_size)+'_'+str(args.variance)+'ttt/'
-    log_dir = args.dir  + str(args.inner_lr) + '_' + str(
-        args.outer_lr) + '_' + str(args.num_bandits)+ '_' + str(args.num_tasks_train) + '_' + str(
-        args.batch_size) + '_' + str(args.variance) + '/'
+    log_dir = args.dir + str(args.inner_lr) + '_' + str(
+        args.outer_lr) + '_' + str(args.num_bandits) + '_' + str(args.num_tasks_train) + '_' + str(
+        args.batch_size) + '_' + str(args.variance) + 'importance/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if not os.path.exists(log_dir+'figures/'):
