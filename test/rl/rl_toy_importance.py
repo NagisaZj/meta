@@ -103,13 +103,15 @@ class sampler():
         action_batch = np.zeros((self.num_steps,1),dtype=np.float32)
         reward_batch = np.zeros((self.num_steps,1),dtype=np.float32)
         state = env.reset()
-        action_batch = np.random.choice(np.arange(self.num_bandits),(self.num_steps,1),replace=False)
+        #action_batch = np.random.choice(np.arange(self.num_bandits),(self.num_steps,1),replace=False)
+        action_batch = np.random.randint(0,self.num_bandits,(self.num_steps,1))
+        #action_batch = np.array(action_batch,dtype=np.float32)
         arg = np.argsort(-1*self.cnt)
         count=0
-        for i in range(self.num_bandits):
-            if self.cnt[arg[i]]>0:
-                action_batch[count,0] = arg[i]
-                count =count + 1
+        #for i in range(self.num_bandits):
+        #    if self.cnt[arg[i]]>0:
+        #        action_batch[count,0] = arg[i]
+        #        count =count + 1
         for i in range(self.num_steps):
             state_batch[i]=state
             #action = policy.sample_action(torch.FloatTensor(state),params).data.numpy()[0]
@@ -394,19 +396,19 @@ if __name__=="__main__":
     parser.add_argument('--num_updates', help='number of updates', type=int, default=100)
     parser.add_argument('--num_layers', help='number of layers', type=int, default=3)
     parser.add_argument('--num_hidden', help='number of hidden nodes', type=int, default=10)
-    parser.add_argument('--num_bandits',help='the number of bandits',type=int,default=10)
-    parser.add_argument('--num_tasks_train', help='the number of meta-training set', type=int, default=5)
+    parser.add_argument('--num_bandits',help='the number of bandits',type=int,default=8)
+    parser.add_argument('--num_tasks_train', help='the number of meta-training set', type=int, default=8)
     parser.add_argument('--num_tasks_test', help='the number of meta-testing set', type=int, default=5)
     parser.add_argument('--r_positive', help='positive reward for good bandits', type=float, default=1)
     parser.add_argument('--r_negative', help='negative reward for bad bandits', type=float, default=-1)
     parser.add_argument('--variance', help='std for reward sampling', type=float, default=0.1)
-    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.5)
+    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.8)
     parser.add_argument('--outer_lr', help='lr for outer update', type=float, default=0.1)
     parser.add_argument('--first_order', help='use first order approximation', action='store_true')
     parser.add_argument('--plot', help='whether plot figure', action='store_true')
     parser.add_argument('--dir', help='log directory', type=str,default='./data/')
-    parser.add_argument('--number', help='number for storing data', type=int, default=5)
-    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=5)
+    parser.add_argument('--number_inner', help='number for inner updates', type=int, default=3)
+    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=64)
     parser.add_argument('--max_kl', help='max kl divergence', type=float, default= 1e-2)
     parser.add_argument('--cg_iters', type=int, default=10)
     parser.add_argument('--cg_damping', help='positive reward for good bandits', type=float, default=1e-5)
@@ -416,7 +418,7 @@ if __name__=="__main__":
     random.seed(0)
     log_dir = args.dir + str(args.inner_lr) + '_' + str(
         args.outer_lr) + '_' + str(args.num_bandits) + '_' + str(args.num_tasks_train) + '_' + str(
-        args.batch_size) + '_' + str(args.variance) + 'importance/'
+        args.batch_size) + '_' + str(args.variance) + 'random/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if not os.path.exists(log_dir+'figures/'):
