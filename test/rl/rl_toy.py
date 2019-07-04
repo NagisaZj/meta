@@ -357,7 +357,7 @@ def main(args,log_dir):
 
 if __name__=="__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_updates', help='number of updates', type=int, default=100)
+    parser.add_argument('--num_updates', help='number of updates', type=int, default=70)
     parser.add_argument('--num_layers', help='number of layers', type=int, default=3)
     parser.add_argument('--num_hidden', help='number of hidden nodes', type=int, default=10)
     parser.add_argument('--num_bandits',help='the number of bandits',type=int,default=8)
