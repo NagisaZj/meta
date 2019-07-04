@@ -253,7 +253,7 @@ def test(learner,args,train_envs, test_envs,log_dir):
             e = batch_sampler.sample(test_envs[j],learner)
             inner_loss = learner.cal_loss(e.s,e.a,e.r)
             params = learner.update_params(inner_loss,args.inner_lr,args.first_order)
-            a_e = batch_sampler.sample(train_envs[j], learner,params)
+            a_e = batch_sampler.sample(test_envs[j], learner,params)
             mean_rew = torch.mean(a_e.r).data.numpy()
             rew_rem_test.append(mean_rew)
 
