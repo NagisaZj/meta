@@ -62,9 +62,11 @@ class bandit():
         self.good_reward = args.r_positive
         self.bad_reward = args.r_negative
         self.variance = args.variance
+        self.good_prob = np.random.uniform(0.0,0.1,(self.num_bandits,))
+        self.good_prob[self.num_good] = 0.95
 
     def step(self,action):
-        if action == self.num_good:
+        if np.random.rand() < self.good_prob[int(action)]:
             reward = np.random.normal(self.good_reward,self.variance,(1,1))
         else:
             reward = np.random.normal(self.bad_reward, self.variance, (1, 1))
@@ -229,25 +231,9 @@ class network(nn.Module):
             updated_params[name] = param - step_size * grad
         return updated_params
 
-def tttest(learner,args,train_envs, test_envs,log_dir):
-    batch_sampler = sampler(args.batch_size)
-    for i in range(args.num_updates):
-        loss_outer = []
-        rew_rem = []
-        for j in range(1):
-            s, a, r = batch_sampler.sample(train_envs[j], learner)
-            inner_loss = learner.cal_loss(s, a, r)
-            grads = torch.autograd.grad(inner_loss, learner.parameters())
-            grads = parameters_to_vector(grads)
-            old_params = parameters_to_vector(learner.parameters())
-            vector_to_parameters(old_params - args.outer_lr * grads, learner.parameters())
-            mean_rew = torch.mean(r).data.numpy()
-            rew_rem.append(mean_rew)
 
-        print(np.mean(rew_rem))
 
 def test(learner,args,train_envs, test_envs,log_dir):
-    learner_test = network(args.num_layers, args.num_hidden, args.num_bandits)
     batch_sampler = sampler(args.batch_size)
     max_kl = args.max_kl
     cg_iters = args.cg_iters
@@ -255,12 +241,22 @@ def test(learner,args,train_envs, test_envs,log_dir):
     ls_max_steps = args.ls_max_steps
     ls_backtrack_ratio = args.ls_backtrack_ratio
     train_rew = []
+    test_rew = []
     for i in range(args.num_updates):
         #print(i)
         adapt_params=[]
         inner_losses=[]
         adapt_episodes=[]
         rew_rem=[]
+        rew_rem_test=[]
+        for j in range(args.num_tasks_test):
+            e = batch_sampler.sample(test_envs[j],learner)
+            inner_loss = learner.cal_loss(e.s,e.a,e.r)
+            params = learner.update_params(inner_loss,args.inner_lr,args.first_order)
+            a_e = batch_sampler.sample(train_envs[j], learner,params)
+            mean_rew = torch.mean(a_e.r).data.numpy()
+            rew_rem_test.append(mean_rew)
+
         for j in range(args.num_tasks_train):
             e = batch_sampler.sample(train_envs[j],learner)
             inner_loss = learner.cal_loss(e.s,e.a,e.r)
@@ -272,8 +268,9 @@ def test(learner,args,train_envs, test_envs,log_dir):
             mean_rew = torch.mean(a_e.r).data.numpy()
             rew_rem.append(mean_rew)
 
-        print(np.mean(rew_rem))
+        print(i,np.mean(rew_rem),np.mean(rew_rem_test))
         train_rew.append(np.mean(rew_rem))
+        test_rew.append(np.mean(rew_rem_test))
         old_loss, _, old_pis = learner.surrogate_loss(adapt_episodes,inner_losses)
         grads = torch.autograd.grad(old_loss, learner.parameters(),retain_graph=True)
         grads = parameters_to_vector(grads)
@@ -322,12 +319,17 @@ def test(learner,args,train_envs, test_envs,log_dir):
 
 
     np.save(log_dir + 'train_rew'+str(args.inner_lr)+'.npy', train_rew)
+    np.save(log_dir + 'test_rew' + str(args.inner_lr) + '.npy', test_rew)
     plt.figure()
     plt.plot(train_rew)
     plt.show()
     plt.figure()
     plt.plot(train_rew)
     plt.savefig(log_dir+'train_rew.png')
+    plt.close()
+    plt.figure()
+    plt.plot(test_rew)
+    plt.savefig(log_dir + 'test_rew.png')
 
     return
 
@@ -335,11 +337,13 @@ def main(args,log_dir):
     learner = network(args.num_layers,args.num_hidden,args.num_bandits)
     train_envs = []
     test_envs = []
+    good_num = int(args.num_bandits/2)
+    good_bandit_train = np.random.randint(0,good_num,(args.num_tasks_train,))
+    good_bandit_test = np.random.randint(0, good_num, (args.num_tasks_test,))
     for i in range(args.num_tasks_train):
-        train_envs.append(bandit(args,i))
+        train_envs.append(bandit(args,good_bandit_train[i]))
     for i in range(args.num_tasks_test):
-        good_num = np.random.randint(0,args.num_bandits)
-        test_envs.append(bandit(args,good_num))
+        test_envs.append(bandit(args,good_bandit_test[i]))
     #learn(learner,args,train_envs,test_envs,log_dir)
     test(learner, args, train_envs, test_envs, log_dir)
         #save(args)
@@ -356,24 +360,24 @@ if __name__=="__main__":
     parser.add_argument('--num_updates', help='number of updates', type=int, default=100)
     parser.add_argument('--num_layers', help='number of layers', type=int, default=3)
     parser.add_argument('--num_hidden', help='number of hidden nodes', type=int, default=10)
-    parser.add_argument('--num_bandits',help='the number of bandits',type=int,default=3)
-    parser.add_argument('--num_tasks_train', help='the number of meta-training set', type=int, default=3)
-    parser.add_argument('--num_tasks_test', help='the number of meta-testing set', type=int, default=5)
+    parser.add_argument('--num_bandits',help='the number of bandits',type=int,default=8)
+    parser.add_argument('--num_tasks_train', help='the number of meta-training set', type=int, default=20)
+    parser.add_argument('--num_tasks_test', help='the number of meta-testing set', type=int, default=20)
     parser.add_argument('--r_positive', help='positive reward for good bandits', type=float, default=1)
     parser.add_argument('--r_negative', help='negative reward for bad bandits', type=float, default=-1)
     parser.add_argument('--variance', help='std for reward sampling', type=float, default=0.1)
-    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.5)
-    parser.add_argument('--outer_lr', help='lr for outer update', type=float, default=0.1)
+    parser.add_argument('--inner_lr', help='lr for inner update', type=float, default=0.8)
+    parser.add_argument('--outer_lr', help='lr for outer update', type=float, default=0.3)
     parser.add_argument('--first_order', help='use first order approximation', action='store_true')
     parser.add_argument('--plot', help='whether plot figure', action='store_true')
     parser.add_argument('--dir', help='log directory', type=str,default='./data/')
     parser.add_argument('--number', help='number for storing data', type=int, default=5)
-    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=64)
-    parser.add_argument('--max_kl', help='max kl divergence', type=float, default= 1e-2)
+    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=128)
+    parser.add_argument('--max_kl', help='max kl divergence', type=float, default= 5e-3)
     parser.add_argument('--cg_iters', type=int, default=10)
     parser.add_argument('--inner_loop_cnt', type=int, default=5)
     parser.add_argument('--cg_damping', help='positive reward for good bandits', type=float, default=1e-5)
-    parser.add_argument('--ls_max_steps', help='negative reward for bad bandits', type=int, default=15)
+    parser.add_argument('--ls_max_steps', help='negative reward for bad bandits', type=int, default=1)
     parser.add_argument('--ls_backtrack_ratio', type=float, default=0.8)
     args = parser.parse_args()
     random.seed(0)
