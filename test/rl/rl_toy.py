@@ -372,7 +372,7 @@ if __name__=="__main__":
     parser.add_argument('--plot', help='whether plot figure', action='store_true')
     parser.add_argument('--dir', help='log directory', type=str,default='./data/')
     parser.add_argument('--number', help='number for storing data', type=int, default=5)
-    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=128)
+    parser.add_argument('--batch_size', help='batch size(also episode length)', type=int, default=64)
     parser.add_argument('--max_kl', help='max kl divergence', type=float, default= 5e-3)
     parser.add_argument('--cg_iters', type=int, default=10)
     parser.add_argument('--inner_loop_cnt', type=int, default=5)
